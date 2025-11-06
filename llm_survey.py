@@ -91,7 +91,7 @@ async def main():
     )
     parser.add_argument(
         "-o", "--output",
-        default="answers.csv",
+        default=f"answers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         help="Output CSV path."
     )
     parser.add_argument(
