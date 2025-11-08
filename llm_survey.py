@@ -46,25 +46,41 @@ async def ask_once(
                 )
             latency_ms = int((time.perf_counter() - t0) * 1000)
             text = (resp.output_text or "").strip()
-            return {"index": idx, "text": text, "latency_ms": latency_ms}
+            usage = getattr(resp, "usage", None)
+            input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
+            output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
+            model = getattr(resp, "model", model)
+            reasoning_tokens = 0
+            if usage:
+                details = getattr(usage, "output_tokens_details", None)
+                reasoning_tokens = getattr(details, "reasoning_tokens", 0) if details else 0
+            return {
+                "index": idx,
+                "text": text,
+                "latency_ms": latency_ms,
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "reasoning_tokens": reasoning_tokens,
+            }
 
         except APIConnectionError as e:
             # network/timeouts => retry
             if retries <= 0:
-                return {"index": idx, "text": f"ERROR: {e}", "latency_ms": None}
+                return {"index": idx, "text": f"ERROR: {e}", "latency_ms": None, "input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0}
 
         except APIStatusError as e:
             # Retry typical transient statuses
             status = getattr(e, "status_code", None)
             if status not in (429, 500, 502, 503, 504):
-                return {"index": idx, "text": f"ERROR {status}: {e}", "latency_ms": None}
+                return {"index": idx, "text": f"ERROR {status}: {e}", "latency_ms": None, "input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0}
             if retries <= 0:
-                return {"index": idx, "text": f"ERROR {status}: {e}", "latency_ms": None}
+                return {"index": idx, "text": f"ERROR {status}: {e}", "latency_ms": None, "input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0}
 
         except APIError as e:
             # Unknown API error — retry a few times, then give up
             if retries <= 0:
-                return {"index": idx, "text": f"ERROR: {e}", "latency_ms": None}
+                return {"index": idx, "text": f"ERROR: {e}", "latency_ms": None, "input_tokens": 0, "output_tokens": 0, "reasoning_tokens": 0}
 
         # Backoff with jitter
         retries -= 1
@@ -138,10 +154,17 @@ async def main():
     # Write CSV: one row per call
     with open(args.output, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["question", args.question, "instructions", instruction_text, "model", args.model])
-        writer.writerow(["index", "answer"])
+        writer.writerow(["question", args.question, "instructions", instruction_text, "model", args.model, "date", datetime.now().isoformat()])
+        writer.writerow(["index", "answer", "input_tokens", "output_tokens", "reasoning_tokens", "model"])
         for row in results:
-            writer.writerow([row["index"], row["text"]])
+            writer.writerow([
+                row["index"],
+                row["text"],
+                row["input_tokens"],
+                row["output_tokens"],
+                row["reasoning_tokens"],
+                row["model"],
+            ])
 
     print(f"Wrote {len(results)} rows to {args.output}")
 
