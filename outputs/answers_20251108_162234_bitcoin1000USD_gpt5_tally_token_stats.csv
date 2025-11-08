@@ -1,0 +1,7 @@
+metric,input_tokens,output_tokens,reasoning_tokens
+count,100,100,100
+sum,4800,132391,114240
+mean,48,1323.91,1142.40
+std,0,248.78,230.29
+min,48,703,576
+max,48,1904,1792
