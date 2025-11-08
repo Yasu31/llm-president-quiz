@@ -161,6 +161,9 @@ async def run(args):
         counts[label] += 1
 
     # Write summary CSV
+    if args.output is None:
+        base, ext = os.path.splitext(args.input)
+        args.output = f"{base}_tally.csv"
     with open(args.output, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(csv_metadata)
@@ -171,7 +174,7 @@ async def run(args):
 def parse_args():
     p = argparse.ArgumentParser(description="Tally answers into predefined categories using OpenAI.")
     p.add_argument("--input", "-i", default="answers.csv", help="Path to input CSV (with an 'answer' column or similar).")
-    p.add_argument("--output", "-o", default="tally.csv", help="Where to write the summary CSV.")
+    p.add_argument("--output", "-o", default=None, help="Where to write the summary CSV.")
     p.add_argument("--model", "-m", default="gpt-5-chat-latest", help="Model to use for classification.")
     p.add_argument("--categories", nargs="+", required=True, help="List of category labels (Ambiguous is added automatically).")
     p.add_argument("--concurrency", "-c", type=int, default=8, help="Max concurrent API calls.")

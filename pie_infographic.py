@@ -41,6 +41,9 @@ def wrap(s, width=60, max_lines=6):
     return "\n".join(lines)
 
 def make_chart(csv_path: str, output: str):
+    if output is None:
+        base, _ = Path(csv_path).with_suffix("").name, Path(csv_path).suffix
+        output = f"{base}_infographic.png"
     df = pd.read_csv(csv_path)
     meta, labels, counts, n_samples = parse_special_paired_format(df)
 
@@ -192,11 +195,12 @@ def make_chart(csv_path: str, output: str):
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    print(f"Infographic saved to: {output}")
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Create an infographic-style pie chart from a tally CSV.")
     parser.add_argument("csv", help="Path to the CSV file.")
-    parser.add_argument("-o", "--output", default="pie_infographic.png", help="Output image path (PNG).")
+    parser.add_argument("-o", "--output", default=None, help="Output image path (PNG).")
     args = parser.parse_args()
     make_chart(args.csv, args.output)
