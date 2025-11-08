@@ -18,6 +18,9 @@ import time
 import random
 import argparse
 import asyncio
+import math
+from statistics import pstdev
+import numpy as np
 from collections import Counter, defaultdict
 from typing import List, Dict
 
@@ -31,12 +34,12 @@ Choose exactly ONE label from the allowed categories for the given sentence (whi
 Rules:
 - Pick a category ONLY if the answer clearly asserts that option.
 - If the answer is unclear, hedged, contains multiple possibilities, refuses to answer,
-  or does not correspond to any allowed category, return "Ambiguous".
+  or does not correspond to any allowed category, return "Other".
 Return the result by calling the provided function."""
 
 def build_tools(categories: List[str]) -> List[Dict]:
-    """Define a function/tool with a strict enum of allowed labels (includes 'Ambiguous')."""
-    enum = list(categories) + ["Ambiguous"]
+    """Define a function/tool with a strict enum of allowed labels (includes 'Other')."""
+    enum = list(categories) + ["Other"]
     return [{
         "type": "function",
         "function": {
@@ -57,7 +60,7 @@ def build_tools(categories: List[str]) -> List[Dict]:
 async def classify_once(client: AsyncOpenAI, model: str,
                         answer: str, categories: List[str],
                         retries: int = 5) -> str:
-    """Classify one answer into a category (or Ambiguous) with simple exponential backoff."""
+    """Classify one answer into a category (or Other) with simple exponential backoff."""
     tools = build_tools(categories)
     wait = 0.5
     while True:
@@ -67,7 +70,7 @@ async def classify_once(client: AsyncOpenAI, model: str,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": (
-                        f"Allowed categories: {', '.join(categories)}; plus Ambiguous.\n"
+                        f"Allowed categories: {', '.join(categories)}; plus Other.\n"
                         f"Statement: {answer.strip()}"
                     )}
                 ],
@@ -76,35 +79,70 @@ async def classify_once(client: AsyncOpenAI, model: str,
             )
             tool_calls = resp.choices[0].message.tool_calls or []
             if not tool_calls:
-                return "Ambiguous"
+                return "Other"
             args = tool_calls[0].function.arguments
             data = json.loads(args) if isinstance(args, str) else args
-            label = data.get("category", "Ambiguous")
-            return label if label in (set(categories) | {"Ambiguous"}) else "Ambiguous"
+            label = data.get("category", "Other")
+            return label if label in (set(categories) | {"Other"}) else "Other"
 
         except APIConnectionError:
             pass  # transient; retry
         except APIStatusError as e:
             if getattr(e, "status_code", 500) not in (429, 500, 502, 503, 504):
-                return "Ambiguous"
+                return "Other"
         except APIError:
             pass
 
         retries -= 1
         if retries < 0:
-            return "Ambiguous"
+            return "Other"
         await asyncio.sleep(wait + random.uniform(0, wait * 0.3))
         wait = min(wait * 2, 8)
 
 # ------------------------------- CSV utilities ------------------------------ #
 
-def detect_answer_column(fieldnames: List[str]) -> str:
-    """Pick the most likely column to contain the answers."""
-    for cand in ("answer", "text", "output", "response"):
-        if cand in fieldnames:
-            return cand
-    # Fallback: take the last column
-    return fieldnames[-1]
+TOKEN_FIELDS = ("input_tokens", "output_tokens", "reasoning_tokens")
+
+def _coerce_token(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+def _format_metric(value):
+    if value is None:
+        return ""
+    if isinstance(value, float) and math.isnan(value):
+        return ""
+    if isinstance(value, (int, float)):
+        numeric = float(value)
+        if numeric.is_integer():
+            return str(int(numeric))
+        return f"{numeric:.2f}"
+    return str(value)
+
+def _compute_stats(values):
+    cleaned = [v for v in values if v is not None]
+    if not cleaned:
+        return {}
+    total = sum(cleaned)
+    count = len(cleaned)
+    mean = total / count
+    std = pstdev(cleaned) if count > 1 else 0.0
+    return {
+        "count": count,
+        "sum": total,
+        "mean": mean,
+        "std": std,
+        "min": min(cleaned),
+        "max": max(cleaned),
+    }
+
 
 async def run(args):
     if not os.getenv("OPENAI_API_KEY"):
@@ -124,8 +162,15 @@ async def run(args):
         rows = list(reader)
         if not rows:
             raise SystemExit("No data rows found after metadata/header row.")
-        answer_col = detect_answer_column(reader.fieldnames or [])
-        raw_answers = [r.get(answer_col, "").strip() for r in rows]
+        answer_col = "answer"
+        token_accumulator = {field: [] for field in TOKEN_FIELDS if field in (reader.fieldnames or [])}
+        raw_answers = []
+        for r in rows:
+            raw_answers.append(r.get(answer_col, "").strip())
+            for field in token_accumulator:
+                token_value = _coerce_token(r.get(field))
+                if token_value is not None:
+                    token_accumulator[field].append(token_value)
 
     # Deduplicate to save tokens
     unique_answers = {}
@@ -153,12 +198,15 @@ async def run(args):
 
     # Tally
     counts = Counter()
-    allowed = list(args.categories) + ["Ambiguous"]
+    allowed = list(args.categories) + ["Other"]
     for a in raw_answers:
-        label = unique_answers.get(a, "Ambiguous")
+        label = unique_answers.get(a, "Other")
         if label not in allowed:
-            label = "Ambiguous"
+            label = "Other"
         counts[label] += 1
+
+    # Compute token statistics
+    token_stats = {field: _compute_stats(token_accumulator.get(field, [])) for field in TOKEN_FIELDS}
 
     # Write summary CSV
     if args.output is None:
@@ -169,14 +217,22 @@ async def run(args):
         writer.writerow(csv_metadata)
         for cat in args.categories:
             writer.writerow([cat, counts.get(cat, 0)])
-        writer.writerow(["Ambiguous", counts.get("Ambiguous", 0)])
+        writer.writerow(["Other", counts.get("Other", 0)])
+        metrics_order = ("count", "sum", "mean", "std", "min", "max")
+        if any(token_stats[field] for field in TOKEN_FIELDS):
+            for metric in metrics_order:
+                row = [f"token_stats:{metric}", 0]
+                for field in TOKEN_FIELDS:
+                    value = token_stats.get(field, {}).get(metric)
+                    row.append(_format_metric(value))
+                writer.writerow(row)
 
 def parse_args():
     p = argparse.ArgumentParser(description="Tally answers into predefined categories using OpenAI.")
     p.add_argument("--input", "-i", default="answers.csv", help="Path to input CSV (with an 'answer' column or similar).")
     p.add_argument("--output", "-o", default=None, help="Where to write the summary CSV.")
     p.add_argument("--model", "-m", default="gpt-5-chat-latest", help="Model to use for classification.")
-    p.add_argument("--categories", nargs="+", required=True, help="List of category labels (Ambiguous is added automatically).")
+    p.add_argument("--categories", nargs="+", required=True, help="List of category labels (Other is added automatically).")
     p.add_argument("--concurrency", "-c", type=int, default=8, help="Max concurrent API calls.")
     p.add_argument("--retries", type=int, default=5, help="Retries per classification on transient errors.")
     return p.parse_args()

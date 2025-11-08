@@ -7,11 +7,19 @@ import textwrap
 from datetime import datetime
 from pathlib import Path
 
+TOKEN_FIELDS = ("input_tokens", "output_tokens", "reasoning_tokens")
+TOKEN_LABELS = {
+    "input_tokens": "Input",
+    "output_tokens": "Output",
+    "reasoning_tokens": "Reasoning",
+}
+
 def parse_special_paired_format(df: pd.DataFrame):
     cols = list(df.columns)
     meta = {"question": "N/A", "system_prompt": "N/A", "model": "N/A"}
     labels = []
     counts = np.array([])
+    token_stats = {}
     if "question" in cols:
         q_idx = cols.index("question")
         if q_idx + 1 < len(cols):
@@ -29,8 +37,29 @@ def parse_special_paired_format(df: pd.DataFrame):
         m_idx = cols.index("model")
         if m_idx + 1 < len(cols):
             meta["model"] = cols[m_idx + 1]
+    if "question" in df.columns:
+        token_mask = df["question"].astype(str).str.startswith("token_stats:")
+        if token_mask.any():
+            input_col = "instructions" if "instructions" in df.columns else None
+            output_col = meta.get("system_prompt")
+            output_col = output_col if output_col in df.columns else None
+            reasoning_col = "model" if "model" in df.columns else None
+
+            def to_number(val):
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    return np.nan
+
+            for _, row in df.loc[token_mask].iterrows():
+                metric = str(row["question"]).split(":", 1)[-1].strip().lower()
+                token_stats[metric] = {
+                    "input_tokens": to_number(row.get(input_col)) if input_col else np.nan,
+                    "output_tokens": to_number(row.get(output_col)) if output_col else np.nan,
+                    "reasoning_tokens": to_number(row.get(reasoning_col)) if reasoning_col else np.nan,
+                }
     n_samples = int(np.nansum(counts).round()) if counts.size > 0 else 0
-    return meta, labels, counts, n_samples
+    return meta, labels, counts, n_samples, token_stats
 
 def wrap(s, width=60, max_lines=6):
     if not isinstance(s, str):
@@ -45,7 +74,7 @@ def make_chart(csv_path: str, output: str):
         base, _ = Path(csv_path).with_suffix("").name, Path(csv_path).suffix
         output = f"{base}_infographic.png"
     df = pd.read_csv(csv_path)
-    meta, labels, counts, n_samples = parse_special_paired_format(df)
+    meta, labels, counts, n_samples, token_stats = parse_special_paired_format(df)
 
     if counts.size:
         # Remove zero-count labels
@@ -118,6 +147,56 @@ def make_chart(csv_path: str, output: str):
         color="#1f2a44",
         bbox=highlight_box,
     )
+
+    stats_order = ("count", "sum", "mean", "std", "min", "max")
+    has_stats = any(token_stats.get(metric) for metric in stats_order)
+    if has_stats:
+        mean_stats = token_stats.get("mean", {})
+        std_stats = token_stats.get("std", {})
+        field_labels = []
+        means = []
+        stds = []
+        for field in TOKEN_FIELDS:
+            mean_val = mean_stats.get(field)
+            if mean_val is None:
+                continue
+            mean_val = float(mean_val)
+            if np.isnan(mean_val):
+                continue
+            std_val = std_stats.get(field)
+            std_val = float(std_val) if std_val is not None else 0.0
+            if np.isnan(std_val):
+                std_val = 0.0
+            field_labels.append(TOKEN_LABELS[field])
+            means.append(mean_val)
+            stds.append(std_val)
+        if field_labels:
+            token_ax = fig.add_axes([0.07, 0.08, 0.28, 0.22], zorder=2)
+            x = np.arange(len(field_labels))
+            colors = plt.get_cmap("Blues")(np.linspace(0.45, 0.75, len(field_labels)))
+            bars = token_ax.bar(x, means, yerr=stds, capsize=6, color=colors, edgecolor="#1f2a44", linewidth=1)
+            token_ax.set_title("Token Stats", loc="left", fontsize=12, fontweight="bold", color="#1f2a44")
+            token_ax.set_ylabel("Mean tokens", color="#334155")
+            token_ax.set_xticks(x)
+            token_ax.set_xticklabels(field_labels, color="#334155")
+            token_ax.tick_params(axis="y", colors="#334155")
+            token_ax.spines["top"].set_visible(False)
+            token_ax.spines["right"].set_visible(False)
+            token_ax.spines["left"].set_color("#94a3b8")
+            token_ax.spines["bottom"].set_color("#94a3b8")
+            token_ax.set_axisbelow(True)
+            token_ax.grid(axis="y", color="#cbd5f5", linestyle="--", linewidth=0.6, alpha=0.7)
+            for idx, bar in enumerate(bars):
+                height = bar.get_height()
+                token_ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    height + stds[idx] + max(means) * 0.02,
+                    f"{height:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                    color="#1f2a44",
+                )
 
     def autopct_with_counts(pct):
         total = counts.sum() if isinstance(counts, np.ndarray) else float(np.sum(counts))
