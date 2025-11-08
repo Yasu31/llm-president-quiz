@@ -87,7 +87,7 @@ def make_chart(csv_path: str, output: str):
         labels = [label for label, keep in zip(labels, positive_mask) if keep]
         counts = counts[positive_mask]
 
-    fig = plt.figure(figsize=(13, 5))
+    fig = plt.figure(figsize=(8, 5))
     fig.patch.set_facecolor("#ecf2f9")
 
     bg_ax = fig.add_axes([0, 0, 1, 1], zorder=0)
@@ -105,12 +105,12 @@ def make_chart(csv_path: str, output: str):
     ax = fig.add_axes([0, 0, 1, 1], zorder=1)
     ax.set_axis_off()
 
-    title_style = dict(ha="left", va="top", fontsize=20, fontweight="bold", color="#1f2a44")
-    label_style = dict(ha="left", va="top", fontsize=12, fontweight="bold", color="#1f2a44")
+    title_style = dict(ha="left", va="top", fontsize=12, fontweight="bold", color="#1f2a44")
+    label_style = dict(ha="left", va="top", fontsize=13, fontweight="bold", color="#1f2a44")
     body_style = dict(
         ha="left",
         va="top",
-        fontsize=11,
+        fontsize=12,
         color="#334155",
         bbox=dict(boxstyle="round,pad=0.4", facecolor="none", edgecolor="none"),
     )
@@ -134,11 +134,11 @@ def make_chart(csv_path: str, output: str):
 
     y = y_top - line_sp * 1.5
     fig.text(left_x, y, "Question", **label_style)
-    fig.text(left_x, y - line_sp * 0.9, wrap(meta.get("question", "N/A"), 60, 8), **body_style)
+    fig.text(left_x, y - line_sp * 0.9, wrap(meta.get("question", "N/A"), 40, 8), **body_style)
 
     y -= line_sp * 3.0
     fig.text(left_x, y, "Model", **label_style)
-    fig.text(left_x, y - line_sp * 0.9, wrap(meta.get("model", "N/A"), 60, 2), **body_style)
+    fig.text(left_x, y - line_sp * 0.9, wrap(meta.get("model", "N/A"), 40, 2), **body_style)
 
     y -= line_sp * 2.2
     fig.text(
@@ -178,19 +178,28 @@ def make_chart(csv_path: str, output: str):
         if field_labels:
             token_ax = fig.add_axes([0.07, 0.08, 0.28, 0.22], zorder=2)
             x = np.arange(len(field_labels))
-            colors = plt.get_cmap("Blues")(np.linspace(0.45, 0.75, len(field_labels)))
-            bars = token_ax.bar(x, means, yerr=stds, capsize=6, color=colors, edgecolor="#1f2a44", linewidth=1)
-            token_ax.set_title("Token Stats", loc="left", fontsize=12, fontweight="bold", color="#1f2a44")
-            token_ax.set_ylabel("Mean tokens", color="#334155")
+            pastel = plt.get_cmap("Pastel2")(np.linspace(0.15, 0.85, len(field_labels)))
+            bars = token_ax.bar(
+                x,
+                means,
+                yerr=stds,
+                capsize=6,
+                color=pastel,
+                edgecolor="#f8fafc",
+                linewidth=1.6,
+            )
+            token_ax.set_facecolor("#edf2fb")
+            token_ax.set_title("Token Stats", loc="left", fontsize=12, fontweight="bold", color="#1f2a44", pad=8)
+            token_ax.set_ylabel("Mean tokens", color="#475569", fontweight="bold")
             token_ax.set_xticks(x)
-            token_ax.set_xticklabels(field_labels, color="#334155")
-            token_ax.tick_params(axis="y", colors="#334155")
+            token_ax.set_xticklabels(field_labels, color="#1f2a44", fontweight="bold")
+            token_ax.tick_params(axis="y", colors="#475569")
             token_ax.spines["top"].set_visible(False)
             token_ax.spines["right"].set_visible(False)
-            token_ax.spines["left"].set_color("#94a3b8")
-            token_ax.spines["bottom"].set_color("#94a3b8")
+            token_ax.spines["left"].set_color("#cbd5f5")
+            token_ax.spines["bottom"].set_color("#cbd5f5")
             token_ax.set_axisbelow(True)
-            token_ax.grid(axis="y", color="#cbd5f5", linestyle="--", linewidth=0.6, alpha=0.7)
+            token_ax.grid(axis="y", color="#e0e7ff", linestyle="--", linewidth=0.6, alpha=0.8)
             for idx, bar in enumerate(bars):
                 height = bar.get_height()
                 token_ax.text(
@@ -200,45 +209,45 @@ def make_chart(csv_path: str, output: str):
                     ha="center",
                     va="bottom",
                     fontsize=9,
+                    fontweight="bold",
                     color="#1f2a44",
                 )
-
-    def autopct_with_counts(pct):
-        total = counts.sum() if isinstance(counts, np.ndarray) else float(np.sum(counts))
-        count = int(round(pct / 100.0 * total))
-        return "" if count == 0 else f"{count}"
 
     colors = plt.get_cmap("Pastel2")(np.linspace(0, 1, len(labels))) if len(labels) else None
 
     if len(labels) and np.sum(counts) > 0:
-        pie_ax = fig.add_axes([0.45, 0.08, 0.5, 0.84], zorder=2)
+        pie_ax = fig.add_axes([0.45, 0.3, 0.5, 0.7], zorder=2)
         pie_ax.set_facecolor("none")
         pie_ax.axis("equal")
         pie_ax.set_axis_off()
 
         pie_kwargs = dict(
-            labels=labels,
-            autopct=autopct_with_counts,
             startangle=90,
             colors=colors,
-            textprops=dict(color="#1f2a44", fontweight="bold", fontsize=11),
             wedgeprops=dict(width=0.5, linewidth=1.5, edgecolor="#f8fafc"),
-            pctdistance=0.72,
         )
         try:
-            wedges, texts, autotexts = pie_ax.pie(counts, radius=1, **pie_kwargs)
+            wedges, _ = pie_ax.pie(counts, radius=1, **pie_kwargs)
         except TypeError:
-            fallback_kwargs = {
-                k: v for k, v in pie_kwargs.items() if k not in {"wedgeprops", "pctdistance", "textprops"}
-            }
-            wedges, texts, autotexts = pie_ax.pie(counts, radius=1, **fallback_kwargs)
+            fallback_kwargs = {k: v for k, v in pie_kwargs.items() if k not in {"wedgeprops"}}
+            wedges, _ = pie_ax.pie(counts, radius=1, **fallback_kwargs)
 
-        for text in texts:
+        legend_labels = []
+        for label, count in zip(labels, counts):
+            rounded = int(round(count)) if np.isclose(count, round(count)) else round(float(count), 2)
+            legend_labels.append(f"{label} ({rounded})")
+
+        legend = pie_ax.legend(
+            wedges,
+            legend_labels,
+            loc="upper left",
+            bbox_to_anchor =(0., 0.1),
+            frameon=False,
+            fontsize=11,
+            ncol=1,
+        )
+        for text in legend.get_texts():
             text.set_color("#1f2a44")
-            text.set_fontsize(11)
-        for autotext in autotexts:
-            autotext.set_color("#1f2a44")
-            autotext.set_fontsize(10)
 
         if pie_kwargs.get("wedgeprops", {}).get("width"):
             inner_radius = 1 - pie_kwargs["wedgeprops"]["width"]
