@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import textwrap
-from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 TOKEN_FIELDS = ("input_tokens", "output_tokens", "reasoning_tokens")
 TOKEN_LABELS = {
@@ -14,12 +14,13 @@ TOKEN_LABELS = {
     "reasoning_tokens": "Reasoning",
 }
 
-def parse_special_paired_format(df: pd.DataFrame):
+def parse_special_paired_format(df: pd.DataFrame, token_stats_df: pd.DataFrame):
     cols = list(df.columns)
     meta = {"question": "N/A", "system_prompt": "N/A", "model": "N/A"}
     labels = []
     counts = np.array([])
     token_stats = {}
+
     if "question" in cols:
         q_idx = cols.index("question")
         if q_idx + 1 < len(cols):
@@ -29,35 +30,36 @@ def parse_special_paired_format(df: pd.DataFrame):
                 df["question"].astype(str).str.strip().str.replace(r"[,\s]+$", "", regex=True).tolist()
             )
             counts = df[q_text_col].fillna(0).astype(float).values
+
     if "instructions" in cols:
         i_idx = cols.index("instructions")
         if i_idx + 1 < len(cols):
             meta["system_prompt"] = cols[i_idx + 1]
+
     if "model" in cols:
         m_idx = cols.index("model")
         if m_idx + 1 < len(cols):
             meta["model"] = cols[m_idx + 1]
-    if "question" in df.columns:
-        token_mask = df["question"].astype(str).str.startswith("token_stats:")
-        if token_mask.any():
-            input_col = "instructions" if "instructions" in df.columns else None
-            output_col = meta.get("system_prompt")
-            output_col = output_col if output_col in df.columns else None
-            reasoning_col = "model" if "model" in df.columns else None
 
-            def to_number(val):
-                try:
-                    return float(val)
-                except (TypeError, ValueError):
-                    return np.nan
+    metric_col = "metric" if "metric" in token_stats_df.columns else token_stats_df.columns[0]
+    for _, row in token_stats_df.iterrows():
+        metric = str(row.get(metric_col, "")).strip().lower()
+        if not metric:
+            continue
+        metric_stats = {}
+        for field in TOKEN_FIELDS:
+            val = row.get(field, np.nan)
+            if isinstance(val, str):
+                val = val.strip()
+            if val in ("", None):
+                metric_stats[field] = np.nan
+                continue
+            try:
+                metric_stats[field] = float(val)
+            except (TypeError, ValueError):
+                metric_stats[field] = np.nan
+        token_stats[metric] = metric_stats
 
-            for _, row in df.loc[token_mask].iterrows():
-                metric = str(row["question"]).split(":", 1)[-1].strip().lower()
-                token_stats[metric] = {
-                    "input_tokens": to_number(row.get(input_col)) if input_col else np.nan,
-                    "output_tokens": to_number(row.get(output_col)) if output_col else np.nan,
-                    "reasoning_tokens": to_number(row.get(reasoning_col)) if reasoning_col else np.nan,
-                }
     n_samples = int(np.nansum(counts).round()) if counts.size > 0 else 0
     return meta, labels, counts, n_samples, token_stats
 
@@ -70,11 +72,14 @@ def wrap(s, width=60, max_lines=6):
     return "\n".join(lines)
 
 def make_chart(csv_path: str, output: str):
+    csv_path_obj = Path(csv_path)
     if output is None:
-        base, _ = Path(csv_path).with_suffix("").name, Path(csv_path).suffix
-        output = f"{base}_infographic.png"
-    df = pd.read_csv(csv_path)
-    meta, labels, counts, n_samples, token_stats = parse_special_paired_format(df)
+        output = f"{csv_path_obj.with_suffix('').name}_infographic.png"
+    token_stats_path = csv_path_obj.with_name(f"{csv_path_obj.stem}_token_stats{csv_path_obj.suffix}")
+    print(f"Loading CSV from: {csv_path_obj} and token stats from: {token_stats_path}")
+    df = pd.read_csv(csv_path_obj)
+    token_stats_df = pd.read_csv(token_stats_path)
+    meta, labels, counts, n_samples, token_stats = parse_special_paired_format(df, token_stats_df)
 
     if counts.size:
         # Remove zero-count labels

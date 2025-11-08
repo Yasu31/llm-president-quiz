@@ -23,6 +23,7 @@ from statistics import pstdev
 import numpy as np
 from collections import Counter, defaultdict
 from typing import List, Dict
+from pathlib import Path
 
 from openai import AsyncOpenAI
 from openai import APIConnectionError, APIStatusError, APIError
@@ -207,25 +208,35 @@ async def run(args):
 
     # Compute token statistics
     token_stats = {field: _compute_stats(token_accumulator.get(field, [])) for field in TOKEN_FIELDS}
+    metrics_order = ("count", "sum", "mean", "std", "min", "max")
 
-    # Write summary CSV
     if args.output is None:
         base, ext = os.path.splitext(args.input)
         args.output = f"{base}_tally.csv"
-    with open(args.output, "w", newline="", encoding="utf-8") as f:
+    output_path = Path(args.output)
+    with output_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(csv_metadata)
         for cat in args.categories:
             writer.writerow([cat, counts.get(cat, 0)])
         writer.writerow(["Other", counts.get("Other", 0)])
-        metrics_order = ("count", "sum", "mean", "std", "min", "max")
-        if any(token_stats[field] for field in TOKEN_FIELDS):
-            for metric in metrics_order:
-                row = [f"token_stats:{metric}", 0]
-                for field in TOKEN_FIELDS:
-                    value = token_stats.get(field, {}).get(metric)
-                    row.append(_format_metric(value))
-                writer.writerow(row)
+
+    token_rows = []
+    for metric in metrics_order:
+        row = [metric]
+        for field in TOKEN_FIELDS:
+            value = token_stats.get(field, {}).get(metric)
+            row.append(_format_metric(value))
+        if any(cell for cell in row[1:]):
+            token_rows.append(row)
+
+    if token_rows:
+        token_stats_path = output_path.with_name(f"{output_path.stem}_token_stats{output_path.suffix}")
+        with token_stats_path.open("w", newline="", encoding="utf-8") as tf:
+            writer = csv.writer(tf)
+            writer.writerow(["metric", *TOKEN_FIELDS])
+            writer.writerows(token_rows)
+        print(f"Token stats saved to: {token_stats_path}")
 
 def parse_args():
     p = argparse.ArgumentParser(description="Tally answers into predefined categories using OpenAI.")
