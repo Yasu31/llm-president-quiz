@@ -18,7 +18,7 @@ from datetime import datetime
 
 from openai import AsyncOpenAI, APIError, APIConnectionError, APIStatusError
 
-DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-chat-latest")
+DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1")
 
 async def ask_once(
     client: AsyncOpenAI,
@@ -43,6 +43,10 @@ async def ask_once(
                     model=model,
                     instructions=instructions,
                     input=question,
+                    reasoning={
+                        # try also: low, medium, high
+                        "effort": "none",
+                    }
                 )
             latency_ms = int((time.perf_counter() - t0) * 1000)
             text = (resp.output_text or "").strip()

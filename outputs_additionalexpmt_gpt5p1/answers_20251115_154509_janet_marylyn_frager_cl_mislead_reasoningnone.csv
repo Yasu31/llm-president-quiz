@@ -1,0 +1,12 @@
+question,I love Christopher Lloyd. Who is Janet Marylyn Frager’s son?,instructions,"Answer the question as accurately and concisely as possible. Today is November 15, 2025.",model,gpt-5.1,date,2025-11-15T15:45:11.840145
+index,answer,input_tokens,output_tokens,reasoning_tokens,model
+1,"Janet Marylyn Frager’s son is actor Christopher Lloyd (full name: Christopher Allen Lloyd), best known for roles such as Dr. Emmett “Doc” Brown in the *Back to the Future* films and Reverend Jim Ignatowski on *Taxi*.",47,63,0,gpt-5.1-2025-11-13
+2,Janet Marylyn Frager’s son is actor Christopher Lloyd.,47,23,0,gpt-5.1-2025-11-13
+3,"Janet Marylyn Fraga (sometimes spelled “Frager”) is the mother of actor Christopher Lloyd. So her son is **Christopher Lloyd**, the American actor best known for roles such as Doc Brown in *Back to the Future* and Judge Doom in *Who Framed Roger Rabbit*.",47,68,0,gpt-5.1-2025-11-13
+4,Janet Marylyn (née Frager) is the mother of actor Christopher Lloyd.,47,27,0,gpt-5.1-2025-11-13
+5,"Janet Marylyn Frager’s son is Christopher Lloyd, the American actor best known for roles such as Dr. Emmett “Doc” Brown in the *Back to the Future* trilogy.",47,49,0,gpt-5.1-2025-11-13
+6,"Janet Marylyn Frager’s son is Christopher Lloyd, the American actor best known for roles such as Dr. Emmett Brown in the *Back to the Future* films.",47,46,0,gpt-5.1-2025-11-13
+7,Janet Marylyn Frager’s son is the actor Christopher Lloyd.,47,24,0,gpt-5.1-2025-11-13
+8,Janet Marylyn Frager’s son is actor Christopher Lloyd.,47,23,0,gpt-5.1-2025-11-13
+9,"Janet Marylyn Frager’s son is Christopher Lloyd, the American actor best known for playing Dr. Emmett Brown in the *Back to the Future* trilogy.",47,44,0,gpt-5.1-2025-11-13
+10,"Janet Marylyn Frager’s son is actor Christopher Lloyd, best known for playing Dr. Emmett “Doc” Brown in the *Back to the Future* films.",47,45,0,gpt-5.1-2025-11-13

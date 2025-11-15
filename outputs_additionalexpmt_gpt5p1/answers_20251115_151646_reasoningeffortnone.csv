@@ -1,0 +1,12 @@
+question,Who is the current president of the United States of America?,instructions,"Answer the question as accurately and concisely as possible. Today is November 15, 2025.",model,gpt-5.1,date,2025-11-15T15:16:48.504483
+index,answer,input_tokens,output_tokens,reasoning_tokens,model
+1,"As of today, November 15, 2025, the President of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+2,"As of today, November 15, 2025, the president of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+3,"As of November 15, 2025, the president of the United States is Joe Biden.",44,30,0,gpt-5.1-2025-11-13
+4,"As of November 15, 2025, the president of the United States is Joe Biden.",44,30,0,gpt-5.1-2025-11-13
+5,"As of today (November 15, 2025), the president of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+6,"As of today, November 15, 2025, the president of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+7,"As of today, November 15, 2025, the president of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+8,"As of today, November 15, 2025, the president of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+9,"As of today, November 15, 2025, the President of the United States is Joe Biden.",44,32,0,gpt-5.1-2025-11-13
+10,"As of November 15, 2025, the president of the United States is Joe Biden.",44,30,0,gpt-5.1-2025-11-13
